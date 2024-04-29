@@ -10,7 +10,6 @@ import requests
 
 def main():
 
-
     # Local URL
     url = "http://localhost:4000"
     # scan_name = "ANG2304_00051"
@@ -27,7 +26,8 @@ def main():
     if response.status_code == 200:
         print(f"Have a response. 200")
     else:
-        print(f"Bad respons code: {response.status_code}")
+        print(f"Bad response code: {response.status_code}")
+
 
 if __name__ == "__main__":
     main()

@@ -19,16 +19,17 @@ bucket = storage_client.get_bucket('hubble-elr-geojsons')
 def miles_to_m(mileage: float) -> float:
     return mileage * 1609.34
 
+
 # Find coordinates for each balance and save it as a Point
-def find_coords(elr: str, meterage: float) -> Point:
+def find_coords(elr: str, meterage: float, elr_gdf) -> Point:
     gdf = elr_gdf[elr_gdf["elr"] == elr].copy()
-    point = gdf.geometry.interpolate(meterage/gdf.length.values[0], normalized=True).values[0]
+    point = gdf.geometry.interpolate(meterage / gdf.length.values[0], normalized=True).values[0]
 
     return point
 
+
 def find_coords_sb(lat: float, long: float) -> Point:
     return Point(long, lat)
-
 
 
 def get_closest_assets(sb_id: int, radius: int) -> list[int]:
@@ -42,7 +43,6 @@ def get_closest_assets(sb_id: int, radius: int) -> list[int]:
 db = Database()
 
 
-
 def process_elr_data():
     blob = bucket.blob('balance/elrs.geojson')
     elr_string = json.loads(blob.download_as_string())
@@ -51,19 +51,22 @@ def process_elr_data():
     # Fuse ELRs into single lines and clean up columns
     elr_gdf["geometry"] = elr_gdf["geometry"].apply(linemerge)
     elr_gdf = elr_gdf[["ELR", "L_M_FROM", "L_M_TO", "geometry"]].copy()
-    elr_gdf.rename(columns={"L_M_FROM":"from", "L_M_TO":"to", "ELR": "elr"}, inplace=True)
+    elr_gdf.rename(columns={"L_M_FROM": "from", "L_M_TO": "to", "ELR": "elr"}, inplace=True)
     elr_gdf.crs = "EPSG:27700"
     elr_gdf = elr_gdf[["elr", "geometry"]].copy()
     elr_gdf = gpd.GeoDataFrame(elr_gdf, crs="EPSG:27700")
 
     return elr_gdf
 
+
 def process_assets(elr_gdf):
     # Load Raw Data
-    assets = pd.read_csv('https://storage.cloud.google.com/hubble-elr-geojsons/balance/assets.csv')   
+    # assets = pd.read_csv('https://storage.cloud.google.com/hubble-elr-geojsons/balance/assets.csv')
+    assets = pd.read_csv('/Users/seb/Documents/balance-matching/cloud_function/assets.csv')
     # Make columns nice and remove unsuable rows
     assets = assets[["Asset Number", "ELR", "Asset Start Mileage", "Asset End Mileage"]]
-    assets.rename(columns={"Asset Number": "asset_number", "Asset Start Mileage": "mileage_from", "Asset End Mileage": "mileage_to", "ELR": "elr"}, inplace=True)
+    assets.rename(columns={"Asset Number": "asset_number", "Asset Start Mileage": "mileage_from",
+                           "Asset End Mileage": "mileage_to", "ELR": "elr"}, inplace=True)
     assets.dropna(subset=["mileage_from", "mileage_to"], inplace=True)
     assets.dropna(subset=["elr"], inplace=True)
 
@@ -85,20 +88,17 @@ def process_assets(elr_gdf):
             "mileage": Mileage(row["mileage_to"]).miles_decimal
         }, index=[0])], ignore_index=True)
 
-
-
     balances["meterage"] = balances["mileage"].apply(miles_to_m)
     balances.drop(columns=["mileage"], inplace=True)
-    balances["geometry"] = balances.apply(lambda x: find_coords(x["elr"], x["meterage"]), axis=1)
+    balances["geometry"] = balances.apply(lambda x: find_coords(x["elr"], x["meterage"], elr_gdf), axis=1)
     balances.drop(columns=["meterage", "elr"], inplace=True)
     balances = gpd.GeoDataFrame(balances, crs="EPSG:27700")
     return balances
 
 
-
 def process_scan_balances():
     scan_balances = db.load_scan_balances()
-    
+
     # Remove useless columns and rows
     scan_balances = scan_balances[["id", "lat", "long"]].copy()
     scan_balances.rename(columns={"id": "sb_id"}, inplace=True)
@@ -113,8 +113,6 @@ def process_scan_balances():
     return scan_balances
 
 
-
-
 def find_matches():
     elr_gdf = process_elr_data()
     balances = process_assets(elr_gdf)
@@ -123,8 +121,6 @@ def find_matches():
     matches = scan_balances.to_dict("record")
 
     return matches
-
-
 
 
 # Response Handler function
@@ -165,5 +161,3 @@ def request_handler(request):
             matches=matches,
             status=200,
         )
-
-

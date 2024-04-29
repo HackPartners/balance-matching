@@ -32,7 +32,7 @@ def find_coords_sb(lat: float, long: float) -> Point:
     return Point(long, lat)
 
 
-def get_closest_assets(sb_id: int, radius: int) -> list[int]:
+def get_closest_assets(sb_id: int, radius: int, balances, scan_balances) -> list[int]:
     points_gdf = balances.copy()
     point = scan_balances[scan_balances["sb_id"] == sb_id].geometry.values[0]
     nearby_points = points_gdf[points_gdf.geometry.apply(lambda geom: geom.distance(point) <= radius)]
@@ -117,7 +117,7 @@ def find_matches():
     elr_gdf = process_elr_data()
     balances = process_assets(elr_gdf)
     scan_balances = process_scan_balances()
-    scan_balances["balances"] = scan_balances.apply(lambda x: get_closest_assets(x["sb_id"], 100), axis=1)
+    scan_balances["balances"] = scan_balances.apply(lambda x: get_closest_assets(x["sb_id"], 100, balances, scan_balances), axis=1)
     matches = scan_balances.to_dict("record")
 
     return matches

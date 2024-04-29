@@ -62,7 +62,7 @@ def process_elr_data():
 def process_assets(elr_gdf):
     # Load Raw Data
     # assets = pd.read_csv('https://storage.cloud.google.com/hubble-elr-geojsons/balance/assets.csv')
-    assets = pd.read_csv('/Users/seb/Documents/balance-matching/cloud_function/assets.csv')
+    assets = pd.read_csv('assets.csv')
     # Make columns nice and remove unsuable rows
     assets = assets[["Asset Number", "ELR", "Asset Start Mileage", "Asset End Mileage"]]
     assets.rename(columns={"Asset Number": "asset_number", "Asset Start Mileage": "mileage_from",
@@ -118,6 +118,7 @@ def find_matches():
     balances = process_assets(elr_gdf)
     scan_balances = process_scan_balances()
     scan_balances["balances"] = scan_balances.apply(lambda x: get_closest_assets(x["sb_id"], 100, balances, scan_balances), axis=1)
+    scan_balances = scan_balances[["sb_id", "balances"]]
     matches = scan_balances.to_dict("record")
 
     return matches

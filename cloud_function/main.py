@@ -8,7 +8,11 @@ from flask import jsonify
 import functions_framework
 from db import Database
 from mileage import Mileage
+from google.cloud import storage
+import json
 
+storage_client = storage.Client()
+bucket = storage_client.get_bucket('hubble-elr-geojsons')
 
 
 # Convert miles to meters
@@ -40,7 +44,10 @@ db = Database()
 
 
 def process_elr_data():
-    elr_gdf = gpd.read_file("https://storage.cloud.google.com/hubble-elr-geojsons/balance/elrs.geojson")
+    blob = bucket.blob('balance/elrs.geojson')
+    elr_string = json.loads(blob.download_as_string())
+    elr_gdf = gpd.GeoDataFrame.from_features(elr_string["features"])
+    # elr_gdf = gpd.read_file("https://storage.cloud.google.com/hubble-elr-geojsons/balance/elrs.geojson")
     # Fuse ELRs into single lines and clean up columns
     elr_gdf["geometry"] = elr_gdf["geometry"].apply(linemerge)
     elr_gdf = elr_gdf[["ELR", "L_M_FROM", "L_M_TO", "geometry"]].copy()
@@ -51,7 +58,7 @@ def process_elr_data():
 
     return elr_gdf
 
-def process_assets():
+def process_assets(elr_gdf):
     # Load Raw Data
     assets = pd.read_csv('https://storage.cloud.google.com/hubble-elr-geojsons/balance/assets.csv')   
     # Make columns nice and remove unsuable rows
@@ -110,7 +117,7 @@ def process_scan_balances():
 
 def find_matches():
     elr_gdf = process_elr_data()
-    balances = process_assets()
+    balances = process_assets(elr_gdf)
     scan_balances = process_scan_balances()
     scan_balances["balances"] = scan_balances.apply(lambda x: get_closest_assets(x["sb_id"], 100), axis=1)
     matches = scan_balances.to_dict("record")

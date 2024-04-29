@@ -33,7 +33,7 @@ class Database:
 
         # Use the connection to execute a query
         cursor = connection1.cursor()
-        query = f""""SELECT sb.* FROM scan_balances sb JOIN route_track rt ON rt.track_id = sb.track_id 
+        query = f"""SELECT sb.* FROM scan_balances sb JOIN route_track rt ON rt.track_id = sb.track_id 
         JOIN routes r ON r.id = rt.route_id
         JOIN client_lines cl ON r.line_id = cl.line_id
         WHERE cl.client_id = 11;"""

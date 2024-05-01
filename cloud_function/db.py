@@ -44,3 +44,30 @@ class Database:
 
 
         return df_scan_balances
+    
+
+
+
+    def load_balances(self):
+        pool = psycopg2.pool.SimpleConnectionPool(
+            5,
+            30,
+            user=self.user,
+            password=self.password,
+            host=self.host,
+            port=self.port,
+            database=self.database,
+        )
+
+        connection1 = pool.getconn()
+
+        # Use the connection to execute a query
+        cursor = connection1.cursor()
+        query = f"""SELECT * FROM BALANCES"""
+        cursor.execute(query)
+        table_colnames = [desc[0] for desc in cursor.description]
+        df_balances = pd.DataFrame(cursor.fetchall(), columns=table_colnames)
+        connection1.close()
+
+
+        return df_balances

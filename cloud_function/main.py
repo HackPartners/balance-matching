@@ -10,10 +10,10 @@ from db import Database
 from mileage import Mileage
 from google.cloud import storage
 import json
-
+from tqdm import tqdm
 storage_client = storage.Client()
 bucket = storage_client.get_bucket('hubble-elr-geojsons')
-
+tqdm.pandas()
 
 # Convert miles to meters
 def miles_to_m(mileage: float) -> float:
@@ -37,17 +37,19 @@ def get_closest_assets(sb_id: int, radius: int, balances, scan_balances) -> list
     point = scan_balances[scan_balances["sb_id"] == sb_id].geometry.values[0]
     nearby_points = points_gdf[points_gdf.geometry.apply(lambda geom: geom.distance(point) <= radius)]
 
-    return nearby_points["asset_number"].unique().tolist()
+
+    return nearby_points["balance_id"].unique().tolist()
 
 
 db = Database()
 
 
 def process_elr_data():
+    print('loading elr data')
     blob = bucket.blob('balance/elrs.geojson')
     elr_string = json.loads(blob.download_as_string())
     elr_gdf = gpd.GeoDataFrame.from_features(elr_string["features"])
-    # elr_gdf = gpd.read_file("https://storage.cloud.google.com/hubble-elr-geojsons/balance/elrs.geojson")
+    print('loaded elr data')
     # Fuse ELRs into single lines and clean up columns
     elr_gdf["geometry"] = elr_gdf["geometry"].apply(linemerge)
     elr_gdf = elr_gdf[["ELR", "L_M_FROM", "L_M_TO", "geometry"]].copy()
@@ -61,31 +63,38 @@ def process_elr_data():
 
 def process_assets(elr_gdf):
     # Load Raw Data
-    # assets = pd.read_csv('https://storage.cloud.google.com/hubble-elr-geojsons/balance/assets.csv')
-    assets = pd.read_csv('assets.csv')
+    assets = db.load_balances()
+
     # Make columns nice and remove unsuable rows
-    assets = assets[["Asset Number", "ELR", "Asset Start Mileage", "Asset End Mileage"]]
-    assets.rename(columns={"Asset Number": "asset_number", "Asset Start Mileage": "mileage_from",
-                           "Asset End Mileage": "mileage_to", "ELR": "elr"}, inplace=True)
-    assets.dropna(subset=["mileage_from", "mileage_to"], inplace=True)
-    assets.dropna(subset=["elr"], inplace=True)
+    assets = assets[["id", "asset_number", "from_location", "to_location"]]
+    assets.rename(columns={"id": "balance_id"}, inplace=True)
+
 
     # Split assets into individual balances
     balances = pd.DataFrame()
 
     for i, row in assets.iterrows():
+        
+        start = pd.DataFrame(row["from_location"], index=[0])
+        end = pd.DataFrame(row["to_location"], index=[0])
+
+        
+                                         
+                                         
         balances = pd.concat([balances, pd.DataFrame({
-            "asset_number": row["asset_number"],
-            "elr": row["elr"],
+            "balance_id": row["balance_id"],
+            "asset_id": row['asset_number'],
+            "elr": start.elr,
             "from_to": "from",
-            "mileage": Mileage(row["mileage_from"]).miles_decimal
+            "mileage": Mileage(start['mileage'][0]).miles_decimal
         }, index=[0])], ignore_index=True)
 
         balances = pd.concat([balances, pd.DataFrame({
-            "asset_number": row["asset_number"],
-            "elr": row["elr"],
+            "balance_id": row["balance_id"],
+            "asset_id": row['asset_number'],
+            "elr": end.elr,
             "from_to": "to",
-            "mileage": Mileage(row["mileage_to"]).miles_decimal
+            "mileage": Mileage(end['mileage'][0]).miles_decimal
         }, index=[0])], ignore_index=True)
 
     balances["meterage"] = balances["mileage"].apply(miles_to_m)
@@ -116,8 +125,10 @@ def process_scan_balances():
 def find_matches():
     elr_gdf = process_elr_data()
     balances = process_assets(elr_gdf)
+    print(balances['geometry'])
     scan_balances = process_scan_balances()
-    scan_balances["balances"] = scan_balances.apply(lambda x: get_closest_assets(x["sb_id"], 100, balances, scan_balances), axis=1)
+    print(balances['geometry'])
+    scan_balances["balances"] = scan_balances.progress_apply(lambda x: get_closest_assets(x["sb_id"], 100, balances, scan_balances), axis=1)
     scan_balances = scan_balances[["sb_id", "balances"]]
     matches = scan_balances.to_dict("record")
 

@@ -18,3 +18,4 @@ python-dotenv==1.0.1
 sqlalchemy==1.4.40
 pg8000==1.29.1
 psycopg2==2.9.5
+tqdm==4.66.4

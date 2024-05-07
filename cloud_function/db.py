@@ -10,6 +10,7 @@ from google.cloud import storage
 import json
 
 
+
 class Database:
     def __init__(self):
         self.host = os.environ["CLOUDSQL_HOST"]
@@ -17,6 +18,9 @@ class Database:
         self.port = os.environ["CLOUDSQL_PORT"]
         self.user = os.environ["CLOUDSQL_USER"]
         self.password = os.environ["CLOUDSQL_PASSWORD"]
+
+
+
 
     def load_scan_balances(self):
         pool = psycopg2.pool.SimpleConnectionPool(
@@ -46,8 +50,6 @@ class Database:
         return df_scan_balances
     
 
-
-
     def load_balances(self):
         pool = psycopg2.pool.SimpleConnectionPool(
             5,
@@ -63,7 +65,7 @@ class Database:
 
         # Use the connection to execute a query
         cursor = connection1.cursor()
-        query = f"""SELECT * FROM BALANCES"""
+        query = f"""SELECT * FROM balances"""
         cursor.execute(query)
         table_colnames = [desc[0] for desc in cursor.description]
         df_balances = pd.DataFrame(cursor.fetchall(), columns=table_colnames)
